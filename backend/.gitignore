@@ -1,0 +1,6 @@
+samconfig.toml
+env.json
+.aws-sam
+.idea
+.history
+__pycache__

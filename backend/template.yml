@@ -1,0 +1,300 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: SAM template for DataRefine Serverless ETL + AI Platform.
+
+Parameters:
+  ConversionLogLevel:
+    Type: String
+    Default: "INFO"
+    AllowedValues:
+      - "INFO"
+      - "DEBUG"
+
+  AlarmRecipientEmailAddress:
+    Type: String
+    AllowedPattern: '[^\s@]+@[^\s@]+\.[^\s@]+'
+    ConstraintDescription: Enter a valid email address
+
+  MongoDBUri:
+    Type: String
+    Description: MongoDB Atlas Connection String
+    NoEcho: true
+    Default: "mongodb://localhost"
+
+  GroqApiKey:
+    Type: String
+    Description: Groq API Key
+    NoEcho: true
+    Default: "gsk_placeholder"
+
+  InputBucketName:
+    Type: String
+    Description: Name of the existing S3 bucket to trigger the ETL pipeline
+    Default: "akhil-serverless-pipeline"
+
+Resources:
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+  
+  NotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: "s3.amazonaws.com"
+            Action: SNS:Publish
+            Resource: !Ref NotificationTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Sub ${AWS::AccountId}
+              ArnEquals:
+                aws:SourceArn: !Sub "arn:aws:s3:::${InputBucketName}"
+      Topics:
+        - !Ref NotificationTopic
+
+  NotificationQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - sqs:SendMessage
+            Resource: "*"
+            Condition:
+              ArnEquals: 
+                aws:SourceArn: !Ref NotificationTopic
+      Queues:
+        - !Ref DataRefineETLQueue
+
+  ApplyS3NotificationLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: notification.handler
+      Runtime: python3.11
+      CodeUri: ./src/notification/
+      Timeout: 60
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: sqs:PurgeQueue
+              Resource:
+                - !GetAtt DataRefineETLQueue.Arn
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: s3:PutBucketNotification
+              Resource:
+                - !Sub 'arn:aws:s3:::${InputBucketName}'
+                - !Sub 'arn:aws:s3:::${InputBucketName}/*'
+
+  ApplyInputBucketTrigger:
+    Type: Custom::ApplyS3Notification
+    Properties:
+      ServiceToken: !GetAtt ApplyS3NotificationLambdaFunction.Arn
+      S3Bucket: !Ref InputBucketName
+      SnsArn: !Ref NotificationTopic
+      NotificationId: S3ObjectCreatedEvent
+      SqsUrls: [ !Ref DataRefineETLQueue ]
+
+  DataRefineETLSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotificationTopic
+      Endpoint: !GetAtt DataRefineETLQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: true
+
+  DataRefineETLQueue:
+    Type: AWS::SQS::Queue
+    DependsOn: DataRefineETLDlq
+    Properties:
+      VisibilityTimeout: 300
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DataRefineETLDlq.Arn
+        maxReceiveCount: 5
+
+  DataRefineETLDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 300
+          
+  DataRefineETLFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      Description: DataRefine ETL logic executing locally in Node.js
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      CodeUri: ./src/datarefine-etl/
+      MemorySize: 1024
+      Timeout: 300
+      Tracing: Active
+      Policies:
+        - SQSPollerPolicy:
+            QueueName:
+              !GetAtt DataRefineETLQueue.Arn
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectAcl
+                - s3:GetObjectVersion
+                - s3:PutObject
+              Resource: !Sub 'arn:aws:s3:::${InputBucketName}/*'
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: !Sub 'arn:aws:s3:::${InputBucketName}'
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+                - xray:GetSamplingRules
+                - xray:GetSamplingTargets
+                - xray:GetSamplingStatisticSummaries
+              Resource: '*'
+      Environment:
+        Variables:
+          MONGODB_URI: !Ref MongoDBUri
+          GROQ_API_KEY: !Ref GroqApiKey
+          DASHGEN_ETL_QUEUE: !Ref DataRefineETLQueue
+          LOG_LEVEL: !Ref ConversionLogLevel
+          POWERTOOLS_SERVICE_NAME: datarefine-etl-service
+      Events:
+        DataRefineETLQueueReaderEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DataRefineETLQueue.Arn
+            BatchSize: 10
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlarmRecipientEmailAddress
+
+  DataRefineETLDlqAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if DataRefine ETL DLQ has any messages
+      AlarmActions:
+        - Ref: AlarmTopic
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DataRefineETLDlq.QueueName
+
+  DataRefineETLQueueAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: DataRefine ETL queue has too many messages
+      AlarmActions:
+        - Ref: AlarmTopic
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DataRefineETLQueue.QueueName
+
+  DataRefineETLFunctionErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: High error rate for DataRefine ETL Function
+      AlarmActions:
+        - Ref: AlarmTopic
+      Metrics:
+        - Id: e1
+          Expression: '(m1/m2) * 100'
+          Label: DataRefineETLFunctionErrorRate
+        - Id: m1
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DataRefineETLFunction
+            Period: 300
+            Stat: Sum
+            Unit: Count
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DataRefineETLFunction
+            Period: 300
+            Stat: Sum
+            Unit: Count
+          ReturnData: false
+      EvaluationPeriods: 1
+      Threshold: 5.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  DataRefineETLFunctionThrottleRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: High throttle rate for DataRefine ETL Function
+      AlarmActions:
+        - Ref: AlarmTopic
+      Metrics:
+        - Id: e1
+          Expression: '(m1/m2) * 100'
+          Label: DataRefineETLFunctionThrottleRate
+        - Id: m1
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Throttles
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DataRefineETLFunction
+            Period: 300
+            Stat: Sum
+            Unit: Count
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DataRefineETLFunction
+            Period: 300
+            Stat: Sum
+            Unit: Count
+          ReturnData: false
+      EvaluationPeriods: 1
+      Threshold: 1.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching

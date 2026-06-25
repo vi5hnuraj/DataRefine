@@ -1,0 +1,10 @@
+version = 0.1
+
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "datarefine-etl-stack"
+region = "eu-north-1"
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+parameter_overrides = "InputBucketName=\"your-bucket-name-here\" AlarmRecipientEmailAddress=\"your-email@example.com\" MongoDBUri=\"mongodb+srv://user:password@cluster.mongodb.net/database?retryWrites=true&w=majority\" GroqApiKey=\"gsk_placeholder_api_key_here\""
