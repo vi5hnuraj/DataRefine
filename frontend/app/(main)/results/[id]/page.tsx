@@ -132,7 +132,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                   </a>
                 )}
                 <a href={`/api/report?id=${dataset.id}&type=quality`} target="_blank" className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors border border-border/50">
-                  <span className="text-sm font-medium">Quality Report (JSON)</span>
+                  <span className="text-sm font-medium">Quality Report (CSV)</span>
                   <Download className="w-4 h-4 text-muted-foreground" />
                 </a>
                 <a href={`/api/report?id=${dataset.id}&type=stats`} target="_blank" className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors border border-border/50">
