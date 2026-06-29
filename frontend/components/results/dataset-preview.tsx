@@ -12,7 +12,7 @@ async function getS3ObjectAsString(s3Url: string, format?: string): Promise<stri
     // For JSON we must fetch the whole file to avoid SyntaxError on parse.
     const commandParams: any = { Bucket: bucket, Key: key };
     if (format === 'csv') {
-        commandParams.Range = 'bytes=0-20000';
+      commandParams.Range = 'bytes=0-20000';
     }
     const response = await s3Client.send(new GetObjectCommand(commandParams));
     const str = await response.Body?.transformToString('utf-8');
@@ -75,16 +75,16 @@ export async function DatasetPreview({ dataset }: { dataset: any }) {
       } else if (fs.existsSync(dataset.processedFile.storageUrl)) {
         str = fs.readFileSync(dataset.processedFile.storageUrl, 'utf8');
       }
-      
+
       if (str) {
         if (dataset.processedFile.format === 'csv') {
-            const parsed = Papa.parse(str, { header: true, preview: 10 });
-            processedData = parsed.data;
-            processedCols = parsed.meta.fields || [];
+          const parsed = Papa.parse(str, { header: true, preview: 10 });
+          processedData = parsed.data;
+          processedCols = parsed.meta.fields || [];
         } else {
-            const parsed = JSON.parse(str);
-            processedData = Array.isArray(parsed) ? parsed.slice(0, 10) : [];
-            if (processedData.length > 0) processedCols = Object.keys(processedData[0]);
+          const parsed = JSON.parse(str);
+          processedData = Array.isArray(parsed) ? parsed.slice(0, 10) : [];
+          if (processedData.length > 0) processedCols = Object.keys(processedData[0]);
         }
       }
     }
@@ -94,7 +94,7 @@ export async function DatasetPreview({ dataset }: { dataset: any }) {
 
   const totalRecords = dataset.statistics?.totalRecords || 0;
   const colCount = Object.keys(dataset.statistics?.numericColumns || {}).length || originalCols.length || processedCols.length;
-  
+
   // Extract unique data types from columnStats
   const typeSet = new Set<string>();
   if (dataset.statistics?.numericColumns) {
@@ -160,12 +160,12 @@ export async function DatasetPreview({ dataset }: { dataset: any }) {
             <TabsTrigger value="processed">Processed Dataset</TabsTrigger>
             <TabsTrigger value="original">Original Upload</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="processed" className="mt-0 flex-grow">
             {renderTable(processedData, processedCols)}
             <p className="text-xs text-muted-foreground mt-4 text-right">Showing top 10 rows max</p>
           </TabsContent>
-          
+
           <TabsContent value="original" className="mt-0 flex-grow">
             {renderTable(originalData, originalCols)}
             <p className="text-xs text-muted-foreground mt-4 text-right">Showing top 10 rows max</p>

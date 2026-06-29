@@ -17,7 +17,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
   const resolvedParams = await params;
   const dataset = await DatasetRepository.getDatasetResults(resolvedParams.id);
   const history = await DatasetRepository.getDatasetHistory();
-  
+
   if (!dataset) {
     return (
       <div className="flex flex-col min-h-screen">
@@ -55,7 +55,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
   return (
     <div className="flex flex-col min-h-screen pb-12">
       <Header />
-      
+
       <main className="flex-grow mx-auto max-w-7xl w-full px-4 pt-8">
         <div className="mb-8">
           <Link href="/history" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
@@ -70,7 +70,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                 Uploaded at {new Date(dataset.createdAt).toLocaleString()}
               </p>
             </div>
-            <Badge 
+            <Badge
               className={`text-sm px-4 py-1.5 ${dataset.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30' : dataset.status === 'FAILED' ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-500'}`}
               variant="outline"
             >
@@ -254,7 +254,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* AI Assessment Comparison Card */}
             {dataset.aiReport && dataset.aiReport.executiveSummary !== "AI review unavailable." && (
               <Card className="bg-card/50 backdrop-blur-md border-purple-500/30 flex flex-col relative overflow-hidden">
@@ -272,9 +272,9 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                         {(() => {
                           const t = stats?.totalRecords || 1;
                           const e = quality?.validationErrors?.length || 0;
-                          const ep = Math.min((e/t)*50, 50);
-                          const dp = Math.min(((stats?.duplicateRecords || 0)/t)*30, 30);
-                          const np = Math.min(((stats?.nullValues || 0)/(t*1))*20, 20);
+                          const ep = Math.min((e / t) * 50, 50);
+                          const dp = Math.min(((stats?.duplicateRecords || 0) / t) * 30, 30);
+                          const np = Math.min(((stats?.nullValues || 0) / (t * 1)) * 20, 20);
                           return Math.max(0, Math.round(100 - ep - dp - np));
                         })()}
                       </span>
@@ -343,7 +343,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                 </div>
               )}
               {quality.validationErrors?.length > 100 && (
-                 <p className="text-xs text-muted-foreground mt-4 text-right">Showing first 100 errors. Download report for full details.</p>
+                <p className="text-xs text-muted-foreground mt-4 text-right">Showing first 100 errors. Download report for full details.</p>
               )}
             </CardContent>
           </Card>
@@ -360,7 +360,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                     const start = new Date(r.startedAt);
                     const end = r.completedAt ? new Date(r.completedAt) : new Date();
                     const durationMs = r.completedAt ? end.getTime() - start.getTime() : 0;
-                    
+
                     return (
                       <div key={r.id} className="flex-1 min-w-[200px] flex flex-col relative z-10">
                         {/* Connecting Line for Desktop */}
@@ -371,12 +371,12 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                         {idx !== runs.length - 1 && (
                           <div className="md:hidden absolute top-6 left-6 w-[2px] h-full bg-border/50 -z-10"></div>
                         )}
-                        
+
                         <div className="flex md:flex-col items-center gap-4 md:gap-3">
                           <div className="flex items-center justify-center w-12 h-12 rounded-full border-4 border-background bg-muted shadow z-10 shrink-0">
                             <div className={`w-3 h-3 rounded-full ${r.status === 'COMPLETED' ? 'bg-emerald-500' : r.status === 'FAILED' ? 'bg-red-500' : 'bg-blue-500 animate-pulse'}`}></div>
                           </div>
-                          
+
                           <div className="flex-1 w-full p-4 rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm shadow-sm flex flex-col gap-2">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-bold uppercase tracking-wider text-foreground">{r.stage}</span>

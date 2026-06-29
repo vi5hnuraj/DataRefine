@@ -7,7 +7,7 @@ export class Cleaner {
   static clean(validationResult: ValidationResult): CleanedResult {
     const rawRows = validationResult.rows;
     const finalRows: Record<string, any>[] = [];
-    
+
     let droppedEmptyRowsCount = 0;
     let droppedDuplicateRowsCount = 0;
     let nullValuesStandardizedCount = 0;
@@ -19,7 +19,7 @@ export class Cleaner {
 
     for (let i = 0; i < rawRows.length; i++) {
       const row = rawRows[i];
-      
+
       // 1. Check for empty row
       const isFullyEmpty = Object.values(row).every(v => v === null || v === undefined || String(v).trim() === '');
       if (isFullyEmpty) {
@@ -30,7 +30,7 @@ export class Cleaner {
       // 2. Standardize null values and build a hash string
       const standardizedRow: Record<string, any> = {};
       let hashStr = "";
-      
+
       Object.entries(row).forEach(([col, val]) => {
         const strVal = String(val).trim();
         if (val === null || val === undefined || strVal === '' || strVal.toLowerCase() === 'null' || strVal.toLowerCase() === 'n/a') {
@@ -48,7 +48,7 @@ export class Cleaner {
         droppedDuplicateRowsCount++;
         continue;
       }
-      
+
       seenHashes.add(hashStr);
       finalRows.push(standardizedRow);
     }
