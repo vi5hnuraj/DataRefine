@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { DatasetRepository } from '@/lib/repositories/dataset.repository';
+import Papa from 'papaparse';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -16,30 +17,37 @@ export async function GET(request: Request) {
       return new NextResponse('Dataset not found', { status: 404 });
     }
 
-    let payload = null;
+    let responseData = '';
     let filename = '';
+    let contentType = 'application/json';
 
     if (type === 'quality') {
-      payload = dataset.qualityReport;
-      filename = `quality-report-${dataset.filename}.json`;
+      const qualityReport = dataset.qualityReport;
+      
+      // Convert validation errors array directly to CSV
+      if (qualityReport && qualityReport.validationErrors && qualityReport.validationErrors.length > 0) {
+        responseData = Papa.unparse(qualityReport.validationErrors);
+      } else {
+        responseData = "No validation errors found in this dataset.";
+      }
+      
+      filename = `quality-report-${dataset.filename}.csv`;
+      contentType = 'text/csv';
     } else if (type === 'stats') {
-      payload = dataset.statistics;
+      if (!dataset.statistics) {
+        return new NextResponse('Report data not found', { status: 404 });
+      }
+      responseData = JSON.stringify(dataset.statistics, null, 2);
       filename = `statistics-${dataset.filename}.json`;
     } else {
       return new NextResponse('Invalid type parameter', { status: 400 });
     }
 
-    if (!payload) {
-      return new NextResponse('Report data not found', { status: 404 });
-    }
-
-    const jsonString = JSON.stringify(payload, null, 2);
-
-    return new NextResponse(jsonString, {
+    return new NextResponse(responseData, {
       status: 200,
       headers: {
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Type': 'application/json',
+        'Content-Type': contentType,
       },
     });
   } catch (error) {
